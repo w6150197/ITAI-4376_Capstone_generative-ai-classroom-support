@@ -147,42 +147,78 @@ async function main() {
     { title: 'Animal Habitats', subject: 'Science', content: 'Where do animals live?\n\n🐟 Fish live in water — rivers, lakes, and oceans\n🐦 Birds build nests in trees\n🐻 Bears live in forests and sometimes caves\n🐫 Camels live in hot deserts\n🐧 Penguins live where it\'s very cold\n\nWhat is YOUR favourite animal? Where does it live?', difficulty: 'easy' },
   ]
 
+  // Teacher-approved interactive steps for the sample lessons
+  const LESSON_STEPS: Record<string, any[]> = {
+    'Counting to 10': [
+      { type: 'read', emoji: '🔢', text: "Let's count together! Point to each thing and say one number." },
+      { type: 'choice', emoji: '🍎', text: 'How many apples? 🍎 🍎 🍎 🍎 🍎', choices: ['4', '5', '6'], answer: 1, buddyTip: 'Touch each apple one at a time and count out loud.' },
+      { type: 'choice', emoji: '⭐', text: 'How many stars? ⭐ ⭐ ⭐ ⭐ ⭐ ⭐ ⭐', choices: ['7', '8', '6'], answer: 0, buddyTip: 'Start at the first star on the left. Count slowly.' },
+      { type: 'choice', emoji: '💙', text: 'How many hearts? 💙 💙 💙', choices: ['2', '4', '3'], answer: 2, buddyTip: 'There are only a few. Count each heart once.' },
+      { type: 'read', emoji: '🎉', text: 'You counted apples, stars, and hearts. Counting helps us know how many things we have.' },
+    ],
+    'Addition within 10': [
+      { type: 'read', emoji: '➕', text: 'Adding means putting groups together to make one bigger group.' },
+      { type: 'choice', emoji: '🍎', text: 'You have 2 apples. You get 3 more. 🍎🍎 + 🍎🍎🍎. How many now?', choices: ['5', '4', '6'], answer: 0, buddyTip: 'Count all the apples together, starting from 1.' },
+      { type: 'choice', emoji: '⭐', text: 'You have 4 stars. 1 more star joins. ⭐⭐⭐⭐ + ⭐. How many now?', choices: ['3', '5', '6'], answer: 1, buddyTip: 'Start at 4 and count one more.' },
+      { type: 'choice', emoji: '🧱', text: '5 blue blocks and 5 green blocks. How many blocks altogether?', choices: ['9', '11', '10'], answer: 2, buddyTip: 'Hold up 5 fingers on each hand. Count all your fingers.' },
+      { type: 'read', emoji: '🎉', text: 'Great adding! When we add, the number gets bigger.' },
+    ],
+    'Shapes Around Us': [
+      { type: 'read', emoji: '⚽', text: 'A circle is round like a ball. It has no corners.' },
+      { type: 'read', emoji: '🔲', text: 'A square has 4 sides that are all the same length, like a window.' },
+      { type: 'read', emoji: '🍕', text: 'A triangle has 3 sides, like a slice of pizza.' },
+      { type: 'choice', emoji: '🔺', text: 'Which shape has 3 sides?', choices: ['Circle', 'Triangle', 'Square'], answer: 1, buddyTip: 'Think about a slice of pizza.' },
+      { type: 'choice', emoji: '🟢', text: 'Which shape is round and has no corners?', choices: ['Square', 'Triangle', 'Circle'], answer: 2, buddyTip: 'Think about a ball.' },
+      { type: 'choice', emoji: '🪟', text: 'A window has 4 equal sides. What shape is it?', choices: ['Square', 'Circle', 'Triangle'], answer: 0, buddyTip: 'Count the sides: 1, 2, 3, 4.' },
+    ],
+    'Animal Habitats': [
+      { type: 'read', emoji: '🏡', text: 'A habitat is the place where an animal lives.' },
+      { type: 'read', emoji: '🐟', text: 'Fish live in water: rivers, lakes, and oceans. Birds build nests in trees.' },
+      { type: 'choice', emoji: '🐟', text: 'Where do fish live?', choices: ['In trees', 'In water', 'In the desert'], answer: 1, buddyTip: 'Fish need to swim.' },
+      { type: 'read', emoji: '🐫', text: 'Camels live in hot deserts. Penguins live where it is very cold.' },
+      { type: 'choice', emoji: '🐧', text: 'Where do penguins live?', choices: ['Where it is very cold', 'In hot deserts', 'In trees'], answer: 0, buddyTip: 'Penguins like ice and snow.' },
+      { type: 'choice', emoji: '🐦', text: 'Where do birds build nests?', choices: ['In the ocean', 'In caves', 'In trees'], answer: 2, buddyTip: 'Look up high, where the leaves are.' },
+    ],
+  }
+
   for (const l of sampleLessons) {
+    const steps = LESSON_STEPS[l.title]
     await prisma.lesson.upsert({
       where: { id: l.title.toLowerCase().replace(/\s+/g, '-') },
-      update: {},
+      update: { steps },
       create: {
         id: l.title.toLowerCase().replace(/\s+/g, '-'),
         title: l.title,
         subject: l.subject,
         content: l.content,
         difficulty: l.difficulty,
+        steps,
         createdById: teacher.id,
       },
     })
   }
 
-  // Assign first lesson to all students
+  // Assign every sample lesson to all students (skips ones already assigned)
   const allProfiles = await prisma.studentProfile.findMany()
-  const countingLesson = await prisma.lesson.findFirst({ where: { title: 'Counting to 10' } })
-  if (countingLesson) {
+  for (const l of sampleLessons) {
+    const lesson = await prisma.lesson.findFirst({ where: { title: l.title } })
+    if (!lesson) continue
     for (const p of allProfiles) {
       const exists = await prisma.lessonAssignment.findFirst({
-        where: { lessonId: countingLesson.id, studentProfileId: p.id },
+        where: { lessonId: lesson.id, studentProfileId: p.id },
       })
       if (!exists) {
         await prisma.lessonAssignment.create({
           data: {
-            lessonId: countingLesson.id,
+            lessonId: lesson.id,
             studentProfileId: p.id,
             status: 'assigned',
-            totalSteps: 3,
+            totalSteps: LESSON_STEPS[l.title]?.length ?? 3,
           },
         })
       }
     }
   }
-
   console.log('Seed completed successfully!')
 }
 
