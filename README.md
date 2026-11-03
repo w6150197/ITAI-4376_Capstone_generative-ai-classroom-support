@@ -19,3 +19,53 @@ A teacher-facing interface will allow educators to receive notifications when pr
 The goal of this project is not to replace teachers, parents, aides, or other professionals. Instead, the system is intended to serve as an assistive technology that helps educators personalize instruction and identify when additional human support may be needed.
 
 This project will investigate the responsible use of generative AI in education, with an emphasis on personalization, accessibility, human oversight, privacy, and student-centered design.
+
+---
+
+# NeuroLearn AI – Generative AI-Powered Personalized Learning and Classroom Support System
+
+**Authors:** Annette Bazan and Natalia
+**Course:** ITAI-4376 Capstone
+
+## About the App
+NeuroLearn AI is an AI-powered app designed to support teachers and improve the learning experience of students on the autism spectrum. Personalized learning profiles are built from parent intake forms (learning preferences, communication methods, sensory sensitivities, triggers, and calming strategies), and the AI Learning Buddy gives guided hints instead of direct answers. A **human-in-the-loop** workflow keeps teachers in control: student work and AI-assisted outputs go to a teacher approval queue, and teachers are alerted when a student requests help or a break.
+
+> All student data in this demo is fictional (5 seeded demo students).
+
+## Live App
+https://neurolearnai.abacusai.app
+
+## Tech Stack
+Next.js (App Router) · TypeScript · Tailwind CSS · Prisma + PostgreSQL · NextAuth · Abacus.AI LLM API
+
+## Run Locally
+1. Copy `.env.example` to `.env` and fill in your values (`DATABASE_URL`, `NEXTAUTH_SECRET`, `ABACUSAI_API_KEY`).
+2. Install and start:
+   ```bash
+   npm install
+   npm run dev
+   ```
+3. (First run) Set up the database and demo data:
+   ```bash
+   npx prisma db push
+   npx prisma db seed
+   ```
+4. Open http://localhost:3000
+
+## Portal Logins (demo accounts)
+| Portal  | Name / Email           | Password / PIN |
+|---------|------------------------|----------------|
+| Teacher | teacher@neurolearn.com | teacher123     |
+| Student | Maya                   | 1234           |
+| Student | Amara                  | 2345           |
+| Student | Liam                   | 3456           |
+| Student | Zoe                    | 4567           |
+| Student | Alex                   | 5678           |
+
+## Project Structure
+- `app/` – pages and API routes (teacher portal, student portal, parent intake, AI hint streaming)
+- `components/` – UI components
+- `lib/` – shared utilities (auth, database client)
+- `prisma/` – database schema
+- `scripts/` – database seed scripts
+- `docs/` – project planning documents

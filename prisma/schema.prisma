@@ -1,0 +1,191 @@
+generator client {
+    provider = "prisma-client-js"
+    binaryTargets = ["native", "linux-musl-arm64-openssl-3.0.x"]
+    output = "/home/ubuntu/neurolearn_app/nextjs_space/node_modules/.prisma/client"
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+enum Role {
+  TEACHER
+  STUDENT
+  PARENT
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum StudentStatus {
+  ACTIVE
+  ON_BREAK
+  NEEDS_HELP
+  INACTIVE
+  OFFLINE
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String?   @unique
+  password      String?
+  name          String
+  role          Role      @default(STUDENT)
+  pin           String?   
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  studentProfile StudentProfile?
+  lessons       Lesson[]  @relation("CreatedLessons")
+  notifications Notification[] @relation("UserNotifications")
+
+  @@index([role])
+  @@index([name, pin])
+}
+
+model StudentProfile {
+  id                  String   @id @default(cuid())
+  userId              String   @unique
+  user                User     @relation(fields: [userId], references: [id])
+  childName           String
+  age                 Int
+  grade               String
+  pronouns            String   @default("they/them")
+  communicationStyle  String
+  sensoryNotes        String?
+  learningStyle       String
+  interests           String
+  stressors           String?
+  calmingStrategies   String?
+  additionalNotes     String?
+  colorsToAvoid       String?
+  avatarColor         String   @default("#0f766e")
+  breakInterval       Int      @default(20)
+  inactivityThreshold Int      @default(5)
+  status              StudentStatus @default(OFFLINE)
+  lastActivity        DateTime @default(now())
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  learningBuddy    LearningBuddy?
+  lessonAssignments LessonAssignment[]
+  approvalItems    ApprovalItem[]
+  activityLogs     ActivityLog[]
+  notifications    Notification[] @relation("StudentNotifications")
+
+  @@index([status])
+}
+
+model LearningBuddy {
+  id              String   @id @default(cuid())
+  studentProfileId String  @unique
+  studentProfile  StudentProfile @relation(fields: [studentProfileId], references: [id])
+  avatarType      String   @default("friendly-robot")
+  buddyName       String   @default("My Buddy")
+  voiceStyle      String   @default("calm")
+  approvalStatus  ApprovalStatus @default(PENDING)
+  teacherNotes    String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Lesson {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  subject     String
+  content     String
+  difficulty  String   @default("medium")
+  createdById String?
+  createdBy   User?    @relation("CreatedLessons", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  assignments LessonAssignment[]
+
+  @@index([subject])
+  @@index([createdById])
+}
+
+model LessonAssignment {
+  id               String   @id @default(cuid())
+  lessonId         String
+  lesson           Lesson   @relation(fields: [lessonId], references: [id])
+  studentProfileId String
+  studentProfile   StudentProfile @relation(fields: [studentProfileId], references: [id])
+  status           String   @default("assigned")
+  progress         Int      @default(0)
+  currentStep      Int      @default(0)
+  totalSteps       Int      @default(1)
+  hintLevel        Int      @default(0)
+  startedAt        DateTime?
+  completedAt      DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([studentProfileId])
+  @@index([lessonId])
+  @@index([status])
+}
+
+model ApprovalItem {
+  id               String   @id @default(cuid())
+  type             String
+  referenceId      String?
+  studentProfileId String?
+  studentProfile   StudentProfile? @relation(fields: [studentProfileId], references: [id])
+  title            String
+  description      String?
+  data             String?
+  status           ApprovalStatus @default(PENDING)
+  teacherNotes     String?
+  createdAt        DateTime @default(now())
+  reviewedAt       DateTime?
+
+  @@index([status])
+  @@index([studentProfileId])
+  @@index([type])
+}
+
+model Notification {
+  id               String   @id @default(cuid())
+  type             String
+  message          String
+  userId           String?
+  user             User?    @relation("UserNotifications", fields: [userId], references: [id])
+  studentProfileId String?
+  studentProfile   StudentProfile? @relation("StudentNotifications", fields: [studentProfileId], references: [id])
+  read             Boolean  @default(false)
+  createdAt        DateTime @default(now())
+
+  @@index([userId])
+  @@index([studentProfileId])
+  @@index([read])
+}
+
+model ActivityLog {
+  id               String   @id @default(cuid())
+  studentProfileId String
+  studentProfile   StudentProfile @relation(fields: [studentProfileId], references: [id])
+  action           String
+  details          String?
+  createdAt        DateTime @default(now())
+
+  @@index([studentProfileId])
+  @@index([createdAt])
+}
+
+model ParentIntake {
+  id          String   @id @default(cuid())
+  childName   String
+  formType    String   @default("questionnaire")
+  formData    String
+  status      ApprovalStatus @default(PENDING)
+  teacherNotes String?
+  createdAt   DateTime @default(now())
+  reviewedAt  DateTime?
+
+  @@index([status])
+}
