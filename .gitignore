@@ -1,0 +1,15 @@
+node_modules/
+.next/
+.build/
+out/
+.env
+.env*.local
+.env.*
+!.env.example
+*.tsbuildinfo
+.abacus*
+.yarn/
+.yarnrc.yml
+.DS_Store
+npm-debug.log*
+yarn-error.log*
