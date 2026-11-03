@@ -25,11 +25,34 @@ export default async function StudentPage() {
 
   if (!profile) redirect('/')
 
+  const [completed, pendingItem] = await Promise.all([
+    prisma.lessonAssignment.findMany({
+      where: { studentProfileId: profile.id, status: 'completed' },
+      include: { lesson: true },
+      orderBy: { completedAt: 'desc' },
+      take: 6,
+    }),
+    prisma.approvalItem.findFirst({
+      where: { type: 'BUDDY', studentProfileId: profile.id, status: 'PENDING' },
+      orderBy: { createdAt: 'desc' },
+    }),
+  ])
+
+  let pendingDesign = null
+  try { pendingDesign = pendingItem?.data ? JSON.parse(pendingItem.data) : null } catch { pendingDesign = null }
+
   // Update status to active
   await prisma.studentProfile.update({
     where: { id: profile.id },
     data: { status: 'ACTIVE', lastActivity: new Date() },
   })
 
-  return <StudentDashboard profile={JSON.parse(JSON.stringify(profile))} userName={session.user.name ?? 'Student'} />
+  return (
+    <StudentDashboard
+      profile={JSON.parse(JSON.stringify(profile))}
+      completed={JSON.parse(JSON.stringify(completed))}
+      pendingDesign={pendingDesign}
+      userName={session.user.name ?? 'Student'}
+    />
+  )
 }

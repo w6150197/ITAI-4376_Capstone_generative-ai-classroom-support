@@ -2,9 +2,13 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { signOut } from 'next-auth/react'
-import { Brain, Users, CheckCircle2, Bell, BookOpen, Plus, Eye, Check, X, LogOut, AlertTriangle, Clock, Heart, Sparkles, FileText, RefreshCw, Settings } from 'lucide-react'
+import { Brain, Users, CheckCircle2, Bell, BookOpen, Plus, Eye, Check, X, LogOut, AlertTriangle, Clock, Heart, Sparkles, FileText, RefreshCw, Settings, Star } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { SafeDate } from '@/components/safe-format'
+import { BuddyAvatar } from '@/components/buddy-avatar'
+import { LessonStep } from '@/lib/buddy'
+
+const parseData = (raw?: string | null): any => { try { return raw ? JSON.parse(raw) : null } catch { return null } }
 
 type Tab = 'overview' | 'students' | 'approvals' | 'lessons' | 'notifications' | 'intakes'
 
@@ -33,6 +37,11 @@ export function TeacherDashboard({ userName }: { userName: string }) {
   const [newLesson, setNewLesson] = useState({ title: '', subject: '', content: '', difficulty: 'medium' })
   const [selectedStudent, setSelectedStudent] = useState<any>(null)
   const [assignModal, setAssignModal] = useState<{ lessonId: string } | null>(null)
+  const [noteFor, setNoteFor] = useState<string | null>(null)
+  const [noteText, setNoteText] = useState('')
+  const [draftSteps, setDraftSteps] = useState<LessonStep[]>([])
+  const [generating, setGenerating] = useState(false)
+  const [genError, setGenError] = useState('')
 
   const fetchAll = useCallback(async () => {
     try {
@@ -54,22 +63,40 @@ export function TeacherDashboard({ userName }: { userName: string }) {
 
   useEffect(() => { fetchAll(); const i = setInterval(fetchAll, 15000); return () => clearInterval(i) }, [fetchAll])
 
-  const handleApproval = async (id: string, status: 'APPROVED' | 'REJECTED') => {
+  const handleApproval = async (id: string, status: 'APPROVED' | 'REJECTED', notes?: string) => {
     await fetch('/api/teacher/approvals', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, status }),
+      body: JSON.stringify({ id, status, notes }),
     })
+    setNoteFor(null); setNoteText('')
     fetchAll()
+  }
+
+  const generateSteps = async () => {
+    setGenerating(true); setGenError('')
+    try {
+      const res = await fetch('/api/teacher/lessons/generate-steps', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newLesson),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Could not generate steps')
+      setDraftSteps(data.steps ?? [])
+    } catch (e: any) {
+      setGenError(e.message ?? 'Could not generate steps')
+    } finally { setGenerating(false) }
   }
 
   const handleCreateLesson = async () => {
     await fetch('/api/teacher/lessons', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newLesson),
+      body: JSON.stringify({ ...newLesson, steps: draftSteps }),
     })
     setNewLesson({ title: '', subject: '', content: '', difficulty: 'medium' })
+    setDraftSteps([])
     setShowCreateLesson(false)
     fetchAll()
   }
@@ -262,24 +289,41 @@ export function TeacherDashboard({ userName }: { userName: string }) {
                       <CheckCircle2 className="w-10 h-10 text-green-400 mx-auto mb-3" />
                       <p className="text-gray-500">No pending approvals. Everything is up to date!</p>
                     </div>
-                  ) : pendingApprovals.map((a: any) => (
+                  ) : pendingApprovals.map((a: any) => {
+                    const design = a?.type === 'BUDDY' ? parseData(a?.data) : null
+                    return (
                     <div key={a?.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-                      <div className="flex items-center justify-between">
-                        <div>
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        {design?.avatarType && <BuddyAvatar avatarType={design.avatarType} color={design.color} accessory={design.accessory} size="md" />}
+                        <div className="flex-1">
                           <div className="flex items-center gap-2">
                             <span className="text-xs font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">{a?.type}</span>
                             <h3 className="font-semibold text-gray-800">{a?.title}</h3>
                           </div>
                           <p className="text-sm text-gray-500 mt-1">{a?.description}</p>
                           <p className="text-xs text-gray-400 mt-1">Student: {a?.studentProfile?.childName ?? 'N/A'}</p>
+                          {Array.isArray(design?.personality) && design.personality.length > 0 && (
+                            <div className="mt-2">
+                              <p className="text-xs font-semibold text-gray-600">Personality (from parent intake):</p>
+                              <ul className="text-xs text-gray-600 list-disc ml-4">
+                                {design.personality.map((t: string) => <li key={t}>{t}</li>)}
+                              </ul>
+                            </div>
+                          )}
                         </div>
                         <div className="flex gap-2">
                           <button onClick={() => handleApproval(a?.id, 'APPROVED')} className="flex items-center gap-1 px-3 py-2 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700"><Check className="w-4 h-4" /> Approve</button>
-                          <button onClick={() => handleApproval(a?.id, 'REJECTED')} className="flex items-center gap-1 px-3 py-2 bg-red-100 text-red-700 rounded-lg text-sm font-semibold hover:bg-red-200"><X className="w-4 h-4" /> Reject</button>
+                          <button onClick={() => { setNoteFor(noteFor === a?.id ? null : a?.id); setNoteText('') }} className="flex items-center gap-1 px-3 py-2 bg-amber-100 text-amber-800 rounded-lg text-sm font-semibold hover:bg-amber-200"><X className="w-4 h-4" /> {a?.type === 'BUDDY' ? 'Request changes' : 'Reject'}</button>
                         </div>
                       </div>
+                      {noteFor === a?.id && (
+                        <div className="mt-3 flex flex-col sm:flex-row gap-2">
+                          <input value={noteText} onChange={e => setNoteText(e.target.value)} placeholder={a?.type === 'BUDDY' ? 'Kind note for the student, e.g. "Let\'s pick a calmer color!"' : 'Reason (optional)'} className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm" />
+                          <button onClick={() => handleApproval(a?.id, 'REJECTED', noteText.trim())} className="px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-semibold hover:bg-amber-700">Send</button>
+                        </div>
+                      )}
                     </div>
-                  ))}
+                  )})}
                 </div>
               )}
 
@@ -297,7 +341,30 @@ export function TeacherDashboard({ userName }: { userName: string }) {
                       <input value={newLesson.title} onChange={e => setNewLesson(p => ({ ...p, title: e.target.value }))} placeholder="Lesson title" className="w-full px-3 py-2 border border-gray-200 rounded-lg" />
                       <input value={newLesson.subject} onChange={e => setNewLesson(p => ({ ...p, subject: e.target.value }))} placeholder="Subject (e.g. Math, Reading)" className="w-full px-3 py-2 border border-gray-200 rounded-lg" />
                       <textarea value={newLesson.content} onChange={e => setNewLesson(p => ({ ...p, content: e.target.value }))} rows={4} placeholder="Lesson content..." className="w-full px-3 py-2 border border-gray-200 rounded-lg" />
-                      <button onClick={handleCreateLesson} disabled={!newLesson.title || !newLesson.content} className="px-4 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-50">Save Lesson</button>
+                      <button onClick={generateSteps} disabled={!newLesson.title || !newLesson.content || generating} className="flex items-center gap-1 px-4 py-2 bg-purple-100 text-purple-800 rounded-lg text-sm font-semibold hover:bg-purple-200 disabled:opacity-50">
+                        <Sparkles className="w-4 h-4" /> {generating ? 'Drafting steps...' : draftSteps.length ? 'Redo interactive steps with AI' : 'Make it interactive with AI'}
+                      </button>
+                      {genError && <p className="text-sm text-red-600">{genError}</p>}
+                      {draftSteps.length > 0 && (
+                        <div className="border border-purple-100 rounded-lg p-3 bg-purple-50/40 space-y-2">
+                          <p className="text-xs font-semibold text-purple-800">AI draft — review before saving. Remove any step you don't want.</p>
+                          {draftSteps.map((s, i) => (
+                            <div key={i} className="bg-white rounded-lg p-2 text-sm flex gap-2 items-start">
+                              <span>{s.emoji}</span>
+                              <div className="flex-1">
+                                <p className="text-gray-800">{s.text}</p>
+                                {s.type === 'choice' && (
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    {s.choices?.map((c, ci) => <span key={ci} className={ci === s.answer ? 'font-bold text-green-700' : ''}>{ci > 0 ? ' · ' : ''}{c}</span>)}
+                                  </p>
+                                )}
+                              </div>
+                              <button onClick={() => setDraftSteps(ds => ds.filter((_, j) => j !== i))} className="text-gray-400 hover:text-red-600" aria-label="Remove step"><X className="w-4 h-4" /></button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <button onClick={handleCreateLesson} disabled={!newLesson.title || !newLesson.content} className="px-4 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-50">{draftSteps.length ? 'Approve & Save Lesson' : 'Save Lesson'}</button>
                     </div>
                   )}
                   {(lessons ?? []).map((l: any) => (
@@ -305,7 +372,7 @@ export function TeacherDashboard({ userName }: { userName: string }) {
                       <div className="flex items-center justify-between">
                         <div>
                           <h3 className="font-semibold text-gray-800">{l?.title}</h3>
-                          <p className="text-xs text-gray-500">{l?.subject} · {l?.difficulty}</p>
+                          <p className="text-xs text-gray-500">{l?.subject} · {l?.difficulty}{Array.isArray(l?.steps) && l.steps.length > 0 ? ` · Interactive (${l.steps.length} steps)` : ''}</p>
                         </div>
                         <button onClick={() => setAssignModal({ lessonId: l?.id })} className="px-3 py-2 bg-blue-100 text-blue-700 rounded-lg text-sm font-semibold hover:bg-blue-200">Assign to Student</button>
                       </div>
@@ -388,7 +455,8 @@ export function TeacherDashboard({ userName }: { userName: string }) {
                         {n?.type === 'HELP_REQUEST' && <AlertTriangle className="w-4 h-4 text-red-500" />}
                         {n?.type === 'BUDDY_REQUEST' && <Sparkles className="w-4 h-4 text-purple-500" />}
                         {n?.type === 'INTAKE' && <FileText className="w-4 h-4 text-teal-500" />}
-                        {!['HELP_REQUEST', 'BUDDY_REQUEST', 'INTAKE'].includes(n?.type ?? '') && <Bell className="w-4 h-4 text-gray-400" />}
+                        {n?.type === 'LESSON_COMPLETE' && <Star className="w-4 h-4 text-yellow-500" />}
+                        {!['HELP_REQUEST', 'BUDDY_REQUEST', 'INTAKE', 'LESSON_COMPLETE'].includes(n?.type ?? '') && <Bell className="w-4 h-4 text-gray-400" />}
                         <p className="text-sm font-medium text-gray-800">{n?.message}</p>
                       </div>
                       <p className="text-xs text-gray-400 mt-1"><SafeDate date={n?.createdAt} options={{ dateStyle: 'medium', timeStyle: 'short' }} /></p>

@@ -24,14 +24,27 @@ export async function PATCH(request: Request) {
     const { id, status, notes } = await request.json()
     const item = await prisma.approvalItem.update({
       where: { id },
-      data: { status, teacherNotes: notes ?? null, reviewedAt: new Date() },
+      data: { status, teacherNotes: notes || null, reviewedAt: new Date() },
     })
-    // If it's a buddy approval, update the buddy status too
     if (item.type === 'BUDDY' && item.referenceId) {
-      await prisma.learningBuddy.update({
-        where: { id: item.referenceId },
-        data: { approvalStatus: status },
-      }).catch(() => {})
+      const buddy = await prisma.learningBuddy.findUnique({ where: { id: item.referenceId } })
+      if (buddy) {
+        let design: Record<string, string> = {}
+        try { design = JSON.parse(item.data ?? '{}') } catch {}
+        const { buddyName, avatarType, voiceStyle, color, accessory } = design
+        if (status === 'APPROVED') {
+          await prisma.learningBuddy.update({
+            where: { id: buddy.id },
+            data: { ...(buddyName ? { buddyName, avatarType, voiceStyle, color, accessory } : {}), approvalStatus: 'APPROVED', teacherNotes: null },
+          })
+        } else if (status === 'REJECTED') {
+          // A brand-new buddy goes back to the student; an approved buddy keeps working while the student tries again.
+          await prisma.learningBuddy.update({
+            where: { id: buddy.id },
+            data: buddy.approvalStatus === 'APPROVED' ? { teacherNotes: notes || null } : { approvalStatus: 'REJECTED', teacherNotes: notes || null },
+          })
+        }
+      }
     }
     return NextResponse.json(item)
   } catch (error: any) {
